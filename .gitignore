@@ -1,6 +1,6 @@
-.git
 .idea
 .env
 __pycache__
 venv
 libraries.txt
+stream.py

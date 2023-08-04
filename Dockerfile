@@ -1,5 +1,5 @@
 #
-FROM python:3.9
+FROM python:3.10-slim
 
 #
 WORKDIR /code
@@ -8,19 +8,7 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 
 #
-RUN pip install boto3
-RUN pip install langchain
-RUN pip install cohere
-RUN pip install python-dotenv
-RUN pip install fastapi
-RUN pip install uvicorn
-RUN pip install python-multipart
-RUN pip install PyMuPDF
-RUN pip install sentence-transformers
-RUN pip install faiss-cpu
-RUN pip install openai
-RUN pip install tiktoken
-RUN pip install streamlit
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 #
 COPY . /code

@@ -133,7 +133,7 @@ def select_model(embedding_model_number=0):
 
 class HuggingFaceModel:  # for emrecan and clip models
     def __init__(self, model_name_or_path, device="cpu"):
-        self.model = HuggingFaceEmbeddings(model_name=model_name_or_path, model_kwargs={'device': device})
+        self.model = HuggingFaceEmbeddings(model_name=model_name_or_path)   # , model_kwargs={'device': device}
 
 
 class CohereModel:
