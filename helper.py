@@ -13,8 +13,8 @@ from langchain.document_loaders import PyMuPDFLoader
 from langchain.retrievers.document_compressors import CohereRerank
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from abc import abstractmethod
-from pydantic import BaseModel
-from typing import TypedDict, List
+# from pydantic import BaseModel
+# from typing import List, TypedDict
 from fastapi import UploadFile
 
 load_dotenv()
@@ -29,24 +29,24 @@ bucket_name = "turkish-qa-collections"
 local_temp_folder = "temp"
 
 
-class ReqBody(BaseModel):
-    embed_model_number: int = 0
-    top_k: int = 10
-    top_n: int = 3
-    engine_name: str = 'gpt-3.5-turbo'
-    llm_temp: float = '0.0'
-    reduction_type: str = 'map_reduce'
-    text_input: str = "Gece çalışması nedir"
+# class ReqBody(BaseModel):
+#     embed_model_number: int = 0
+#     top_k: int = 10
+#     top_n: int = 3
+#     engine_name: str = 'gpt-3.5-turbo'
+#     llm_temp: float = '0.0'
+#     reduction_type: str = 'map_reduce'
+#     text_input: str = "Gece çalışması nedir"
 
 
-class Feature(TypedDict):
-    result_status: bool
-    answer: str
-    sources: list
+# class Feature(TypedDict):
+#     result_status: bool
+#     answer: str
+#     sources: list
 
 
-class AnsOut(BaseModel):
-    features: List[Feature]
+# class AnsOut(BaseModel):
+#     features: List[Feature]
 
 
 def upload_process_send_s3(uploaded_file: UploadFile, collection_id: str, embedding_model_number: int):
@@ -132,7 +132,7 @@ def select_model(embedding_model_number=0):
 
 
 class HuggingFaceModel:  # for emrecan and clip models
-    def __init__(self, model_name_or_path, device="cpu"):
+    def __init__(self, model_name_or_path):   # , device="cpu"
         self.model = HuggingFaceEmbeddings(model_name=model_name_or_path)   # , model_kwargs={'device': device}
 
 
@@ -245,15 +245,15 @@ class S3client:
                 return True
         return False
 
-    def folder_names_in_a_collection_on_s3(self, collection_id: str) -> List:
-        response = self.client.list_objects_v2(Bucket=self.bucket_name)
-        folders = []
-        for obj in response['Contents']:
-            if obj['Key'].endswith('/') and obj['Key'] != collection_id + '/':
-                sub_folder_in_collection = obj['Key'].split("/")[1]
-                if sub_folder_in_collection not in folders:
-                    folders.append(sub_folder_in_collection)
-        return folders
+    # def folder_names_in_a_collection_on_s3(self, collection_id: str):
+    #     response = self.client.list_objects_v2(Bucket=self.bucket_name)
+    #     folders = []
+    #     for obj in response['Contents']:
+    #         if obj['Key'].endswith('/') and obj['Key'] != collection_id + '/':
+    #             sub_folder_in_collection = obj['Key'].split("/")[1]
+    #             if sub_folder_in_collection not in folders:
+    #                 folders.append(sub_folder_in_collection)
+    #     return folders
 
     def upload_file_(self, local_file_path, collection_id, s3_file_name):
         res = True
@@ -291,8 +291,8 @@ class S3client:
         return result
 
     def get_file_folders(self, collection_id):
-        file_names: List = []
-        folders: List = []
+        file_names = []
+        folders = []
         paginator = self.client.get_paginator('list_objects_v2')
         response_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=collection_id + "/")
         for response in response_iterator:
