@@ -1,6 +1,5 @@
 import helper
 from fastapi import FastAPI, UploadFile
-from fastapi.responses import RedirectResponse
 
 app = FastAPI()
 
@@ -15,32 +14,28 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/upload_process_send_s3")
-def upload_process_send_s3(uploaded_file: UploadFile,
-                           collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45",
-                           embedding_model_number: int = 0):
-    return helper.upload_process_send_s3(uploaded_file=uploaded_file,
-                                         collection_id=collection_id,
-                                         embedding_model_number=embedding_model_number)
+@app.post("/upload_file_process_send_s3")
+def upload_file_process_send_s3(uploaded_file: UploadFile,
+                                collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
+    return helper.upload_file_process_send_s3(uploaded_file=uploaded_file,
+                                              collection_id=collection_id)
 
 
-# @app.post("/del_local_file")
-# def del_local_file_folder(local_file_name: str = "7234163a-311a-11ee-a1b4-00d49ea32059.pdf"):
-#     return helper.del_local_file(local_file_name=local_file_name)
-#
-#
-# @app.post("/del_local_folder")
-# def del_local_folder(local_folder_name: str = "new-folder"):
-#     return helper.del_local_folder(local_folder_name=local_folder_name)
-#
-#
-# @app.post("/process_pdf_send_s3")
-# def process_pdf_send_s3(local_file: str = "e04baa17-3200-11ee-a27d-00d49ea32059.pdf",
-#                         collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45",
-#                         embedding_model_number: int = 0):
-#     return helper.process_pdf_send_s3(local_file=local_file,
-#                                       collection_id=collection_id,
-#                                       embedding_model_number=embedding_model_number)
+@app.post("/del_doc_with_index_from_s3_collection")
+def del_doc_with_index_from_s3_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45",
+                                          file_name_with_extension: str = "4647bec2-3678-11ee-ae3b-00d49ea32059.pdf"):
+    return helper.del_doc_with_index_from_s3_collection(collection_id=collection_id,
+                                                        file_name_with_extension=file_name_with_extension)
+
+
+@app.post("/del_s3_collection")
+def del_s3_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
+    return helper.del_s3_collection(collection_id=collection_id)
+
+
+@app.post("/del_local_collection")
+def del_local_folder(local_collection_name: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
+    return helper.del_local_collection(local_collection_name=local_collection_name)
 
 
 @app.post("/download_collection_from_s3_to_local")

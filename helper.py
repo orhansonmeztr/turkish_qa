@@ -27,6 +27,8 @@ chunk_size = 500
 chunk_overlap = 30
 bucket_name = "turkish-qa-collections"
 local_temp_folder = "temp"
+total_number_of_embedding_models = 5
+supported_file_types_for_uploading = ["pdf"]
 
 
 # class ReqBody(BaseModel):
@@ -49,36 +51,48 @@ local_temp_folder = "temp"
 #     features: List[Feature]
 
 
-def upload_process_send_s3(uploaded_file: UploadFile, collection_id: str, embedding_model_number: int):
-    file_name = str(uuid.uuid1()) + Path(uploaded_file.filename).suffix
-    # old_file_name = uploaded_file.filename
-    uploaded_file.filename = local_temp_folder + '/' + file_name
-    res = True
-    result = {"file_name": file_name}
-    object_path = os.path.join(os.getcwd(), local_temp_folder, file_name)
-    if os.path.exists(object_path):
-        print(f"The file with the name '{file_name}' already exists in the local folder.")
-        res = False
-        result["message"] = f"The file with the name '{file_name}' already exists in the local folder."
-    else:
-        try:
-            with open(uploaded_file.filename, 'wb') as f:
-                shutil.copyfileobj(uploaded_file.file, f)
-        except Exception as e:
+def upload_file_process_send_s3(uploaded_file: UploadFile, collection_id: str):
+    filetype = Path(uploaded_file.filename).suffix
+    result = {}
+    if filetype in supported_file_types_for_uploading:
+        file_name = str(uuid.uuid1()) + filetype
+        old_file_name = uploaded_file.filename
+        uploaded_file.filename = local_temp_folder + '/' + file_name
+        res = True
+        result["old_file_name"] = old_file_name
+        result["new_file_name"] = file_name
+        object_path = os.path.join(os.getcwd(), local_temp_folder, file_name)
+        if os.path.exists(object_path):
+            print(f"The file with the name '{file_name}' already exists in the local folder.")
             res = False
-            result["error_message"] = f"An error occurred: '{e}'"
-        finally:
-            uploaded_file.file.close()
-    if res:
-        res1 = process_pdf_send_s3(local_file=file_name,
-                                   collection_id=collection_id,
-                                   embedding_model_number=embedding_model_number)["result_status"]
-        res = res and res1
-        res2 = upload_file_to_s3(local_file=file_name,
-                                 collection_id=collection_id,
-                                 s3_file_name=file_name)["result_status"]
-        res = res and res2
-    result["result_status"] = res
+            result["message"] = f"The file with the name '{file_name}' already exists in the local folder."
+        else:
+            try:
+                with open(uploaded_file.filename, 'wb') as f:
+                    shutil.copyfileobj(uploaded_file.file, f)
+            except Exception as e:
+                res = False
+                result["error_message"] = f"An error occurred: '{e}'"
+            finally:
+                uploaded_file.file.close()
+        if res:
+            doc_chunks = produce_doc_chunks_from_file(local_file=file_name, filetype=filetype)
+            for i in range(total_number_of_embedding_models):
+                res1 = process_doc_send_s3(local_file=file_name,
+                                           collection_id=collection_id,
+                                           embedding_model_number=i,
+                                           doc_chunks=doc_chunks)["result_status"]
+                res = res and res1
+            res2 = upload_file_to_s3(local_file=file_name,
+                                     collection_id=collection_id,
+                                     s3_file_name=file_name)["result_status"]
+            res = res and res2
+        if res:
+            shutil.rmtree(os.path.join(os.getcwd(), local_temp_folder, Path(file_name).stem))
+        result["result_status"] = res
+    else:
+        result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
+        result["result_status"] = False
     return result
 
 
@@ -116,13 +130,13 @@ class PDFDocumentProcessor(DocumentProcessor):
 
 def select_model(embedding_model_number=0):
     if embedding_model_number == 0:
-        embedding_model = HuggingFaceModel(model_name_or_path="emrecan/bert-base-turkish-cased-mean-nli-stsb-tr")
+        embedding_model = HuggingFaceModel(model_name_or_path="bert-base-turkish-cased-mean-nli-stsb-tr")
     elif embedding_model_number == 1:
         embedding_model = TensorflowModel()
     elif embedding_model_number == 2:
         embedding_model = CohereModel()
     elif embedding_model_number == 3:
-        embedding_model = HuggingFaceModel(model_name_or_path="sentence-transformers/clip-ViT-B-32-multilingual-v1")
+        embedding_model = HuggingFaceModel(model_name_or_path="clip-ViT-B-32-multilingual-v1")
     elif embedding_model_number == 4:
         embedding_model = OpenaiModel()
     else:
@@ -132,8 +146,8 @@ def select_model(embedding_model_number=0):
 
 
 class HuggingFaceModel:  # for emrecan and clip models
-    def __init__(self, model_name_or_path):   # , device="cpu"
-        self.model = HuggingFaceEmbeddings(model_name=model_name_or_path)   # , model_kwargs={'device': device}
+    def __init__(self, model_name_or_path):  # , device="cpu"
+        self.model = HuggingFaceEmbeddings(model_name=model_name_or_path)  # , model_kwargs={'device': device}
 
 
 class CohereModel:
@@ -142,13 +156,14 @@ class CohereModel:
 
 
 class TensorflowModel:
-    def __init__(self, model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"):
+    # model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
+    def __init__(self, model_url="universal-sentence-encoder-multilingual_3"):
         self.model = TensorflowHubEmbeddings(model_url=model_url)
 
 
 class OpenaiModel:
-    def __init__(self, model_name="gpt-3.5-turbo"):
-        self.model = OpenAIEmbeddings(model_name=model_name, openai_api_key=openai_api_key)
+    def __init__(self, model="text-embedding-ada-002"):
+        self.model = OpenAIEmbeddings(model=model, openai_api_key=openai_api_key)
 
 
 class FAISSIndexManager:
@@ -169,9 +184,11 @@ class FAISSIndexManager:
         else:
             object_path = os.path.join(os.getcwd(), local_temp_folder, folder_name)
             self.dbFAISS.save_local(object_path)
-            s3 = S3client()
+            s3 = S3()
             try:
-                res = s3.upload_folder(object_path, collection_id, folder_name)["result_status"]
+                res = s3.upload_folder(object_path,
+                                       collection_id,
+                                       folder_name)["result_status"]
             except Exception as e:
                 res = False
                 result["error_message"] = f"An error occurred: '{e}'"
@@ -202,21 +219,22 @@ class FAISSIndexRetriever:
         result["result_status"] = res
         return result
 
-    def load_indexes_from_local_collection(self, collection_id):
+    def load_indexes_from_local_collection(self, collection_id, embedding_model_number: int):
         result = {}
         res = True
         root_dir = os.path.join(os.getcwd(), local_temp_folder, collection_id)
         if not os.path.exists(root_dir):
-            result["faiss_error"] = (f"The collection folder with the name '{collection_id}' that contains indexes was "
-                                     f"not found in the local folder.")
+            result["faiss_error"] = (f"The collection folder with the name '{collection_id}' was not found in the "
+                                     f"local folder.")
             res = False
         else:
             index_folders = []
-
             for file in os.listdir(root_dir):
-                d = os.path.join(root_dir, file)
-                if os.path.isdir(d):
-                    index_folders.append(d)
+                doc = os.path.join(root_dir, file)
+                if os.path.isdir(doc):
+                    for index_folder in os.listdir(doc):
+                        if index_folder == str(embedding_model_number):
+                            index_folders.append(os.path.join(root_dir, file, index_folder))
             if len(index_folders) == 0:
                 res = False
                 result["index_error"] = f"There is no any index folder in the given local '{collection_id}' folder."
@@ -232,34 +250,19 @@ class FAISSIndexRetriever:
         return result
 
 
-class S3client:
+class S3:
     def __init__(self):
         self.bucket_name = bucket_name
         self.client = boto3.client(service_name="s3", aws_access_key_id=aws_access_key_os,
                                    aws_secret_access_key=aws_secret_access_key_os)
 
-    def check_object_exists_on_s3(self, file_or_folder_name):
-        response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=file_or_folder_name)
-        for item in response.get('Contents', []):
-            if item['Key'] == file_or_folder_name + '/':
-                return True
-        return False
-
-    # def folder_names_in_a_collection_on_s3(self, collection_id: str):
-    #     response = self.client.list_objects_v2(Bucket=self.bucket_name)
-    #     folders = []
-    #     for obj in response['Contents']:
-    #         if obj['Key'].endswith('/') and obj['Key'] != collection_id + '/':
-    #             sub_folder_in_collection = obj['Key'].split("/")[1]
-    #             if sub_folder_in_collection not in folders:
-    #                 folders.append(sub_folder_in_collection)
-    #     return folders
-
     def upload_file_(self, local_file_path, collection_id, s3_file_name):
         res = True
         result = {}
         s3_file_path = collection_id + "/" + s3_file_name
-        if self.check_object_exists_on_s3(s3_file_path):
+        file_names, folders = self.get_file_folder_names(prefix=collection_id + "/")
+
+        if s3_file_path in file_names:
             result["file_error"] = f"The file with the name '{s3_file_path}' already exists in the collection."
             res = False
         else:
@@ -274,10 +277,11 @@ class S3client:
     def upload_folder(self, local_folder_path, collection_id, s3_folder_name):
         res = True
         result = {}
+        file_names, folders = self.get_file_folder_names(prefix=collection_id + "/")
         try:
-            if not self.check_object_exists_on_s3(collection_id):
+            if not collection_id + "/" in folders:
                 self.client.put_object(Bucket=self.bucket_name, Body='', Key=collection_id + "/")
-            if not self.check_object_exists_on_s3(collection_id + "/" + s3_folder_name):
+            if not collection_id + "/" + s3_folder_name in folders:
                 self.client.put_object(Bucket=self.bucket_name, Body='', Key=collection_id + "/" + s3_folder_name + "/")
             for file_name in os.listdir(local_folder_path):
                 file_path = os.path.join(local_folder_path, file_name)
@@ -290,25 +294,65 @@ class S3client:
         result["result_status"] = res
         return result
 
-    def get_file_folders(self, collection_id):
+    def get_file_folder_names(self, prefix):
         file_names = []
         folders = []
         paginator = self.client.get_paginator('list_objects_v2')
-        response_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=collection_id + "/")
+        response_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for response in response_iterator:
             for item in response.get('Contents', []):
                 key = item['Key']
                 if key[-1] == "/":
                     folders.append(key)
                 else:
-                    if str(key).endswith(".faiss") or str(key).endswith(".pkl"):
-                        file_names.append(key)
+                    file_names.append(key)
         return file_names, folders
+
+    def del_doc_with_index_from_collection(self, collection_id: str, file_name_with_extension: str):
+        res = True
+        result = {}
+        file = collection_id + "/" + file_name_with_extension
+        try:
+            self.client.delete_object(Bucket=self.bucket_name, Key=file)
+        except Exception as e:
+            res = False
+            result["error_message"] = f"An error occurred: '{e}'"
+
+        folder = collection_id + "/" + file_name_with_extension.split(".")[0] + "/"
+        try:
+            files_in_folder = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=folder)["Contents"]
+            files_to_delete = []
+            for f in files_in_folder:
+                files_to_delete.append({"Key": f["Key"]})
+            self.client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": files_to_delete})
+        except Exception as e:
+            res = False
+            result["error_message"] = f"An error occurred: '{e}'"
+
+        result["result_status"] = res
+        return result
+
+    def del_collection(self, collection_id: str):
+        res = True
+        result = {}
+        try:
+            files_in_folder = self.client.list_objects_v2(Bucket=self.bucket_name,
+                                                          Prefix=collection_id + "/")["Contents"]
+            files_to_delete = []
+            for f in files_in_folder:
+                files_to_delete.append({"Key": f["Key"]})
+            self.client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": files_to_delete})
+        except Exception as e:
+            res = False
+            result["error_message"] = f"An error occurred: '{e}'"
+
+        result["result_status"] = res
+        return result
 
     def download_index_to_local(self, collection_id):
         res = True
         result = {}
-        file_names, folders = self.get_file_folders(collection_id)
+        file_names, folders = self.get_file_folder_names(prefix=collection_id + "/")
         local_path = Path(os.path.join(os.getcwd(), local_temp_folder))
         try:
             for folder in folders:
@@ -318,7 +362,7 @@ class S3client:
                 folder_path.mkdir(parents=True, exist_ok=True)
 
             for file_name in file_names:
-                if not str(file_name).endswith(".pdf"):
+                if not str(file_name).split(".")[-1] in supported_file_types_for_uploading:
                     file_path = Path.joinpath(local_path, file_name)
                     self.client.download_file(
                         self.bucket_name,
@@ -384,7 +428,7 @@ class OpenAILLMInteraction:
 
 def upload_file_to_s3(local_file, collection_id, s3_file_name):
     local_file_path = os.path.join(os.getcwd(), local_temp_folder, local_file)
-    s3 = S3client()
+    s3 = S3()
     result = {}
     res = True
     try:
@@ -421,46 +465,81 @@ def del_local_file(local_file_name):
     return result
 
 
-def del_local_folder(local_folder_name):
-    folder_ = os.path.join(os.getcwd(), local_temp_folder, local_folder_name)
+def del_local_collection(local_collection_name):
+    folder_ = os.path.join(os.getcwd(), local_temp_folder, local_collection_name)
     res = True
-    err_msg = None
+    result = {}
     if not os.path.exists(folder_):
-        print(f"The folder with the name '{local_folder_name}' not found in the local folder.")
+        result["message"] = f"The folder with the name '{local_collection_name}' was not found in the local folder."
         res = False
     else:
         try:
             shutil.rmtree(folder_)
         except Exception as e:
-            err_msg = e
+            result["error_message"] = f"An error occurred: '{e}'"
+            res = False
     result = {"result_status": res}
-    if not res:
-        result["message"] = f"The folder with the name '{local_folder_name}' not found in the local folder."
-    if err_msg:
-        result["error_message"] = f"An error occurred: '{err_msg}'"
     return result
 
 
-def process_pdf_send_s3(local_file: str,
+def produce_doc_chunks_from_file(local_file: str, filetype: str):
+    doc_chunks = None
+    if filetype in supported_file_types_for_uploading:
+        if filetype == "pdf":
+            pdfDocumentProcessor = PDFDocumentProcessor(local_file=local_file)
+            pdfDocumentProcessor.process_document()
+            pdfDocumentProcessor.split_to_chunks()
+            doc_chunks = pdfDocumentProcessor.docs
+    return doc_chunks
+
+
+def process_doc_send_s3(local_file: str,
                         collection_id: str,
-                        embedding_model_number: int):
-    pdfDocumentProcessor = PDFDocumentProcessor(local_file=local_file)
-    pdfDocumentProcessor.process_document()
-    pdfDocumentProcessor.split_to_chunks()
-    doc_chunks = pdfDocumentProcessor.docs
+                        embedding_model_number: int,
+                        doc_chunks):
     embedding_model = select_model(embedding_model_number=embedding_model_number).model
     faissIndexManager = FAISSIndexManager(embedding_model=embedding_model)
     faissIndexManager.create_index_db(docs=doc_chunks)
     res = faissIndexManager.save_index_to_s3(collection_id=collection_id,
-                                             folder_name=Path(local_file).stem)["result_status"]
+                                             folder_name=Path(local_file).stem + "/" + str(embedding_model_number)
+                                             )["result_status"]
     result = {"result_status": res}
     return result
 
 
 def download_collection_from_s3_to_local(collection_id):
     result = {}
-    s3 = S3client()
+    s3 = S3()
     res = s3.download_index_to_local(collection_id=collection_id)["result_status"]
+    result["result_status"] = res
+    return result
+
+
+def del_doc_with_index_from_s3_collection(collection_id: str, file_name_with_extension: str):
+    result = {}
+    res = True
+    if collection_id is None or file_name_with_extension is None:
+        res = False
+        result["message"] = "collection_id and file_name_with_extension must be given"
+    else:
+        s3 = S3()
+        res1 = s3.del_doc_with_index_from_collection(collection_id=collection_id,
+                                                     file_name_with_extension=file_name_with_extension)["result_status"]
+        res = res and res1
+    result["result_status"] = res
+    return result
+
+
+def del_s3_collection(collection_id: str):
+    result = {}
+    res = True
+    if collection_id is None:
+        res = False
+        result["message"] = "collection_id must be given"
+    else:
+        s3 = S3()
+        res1 = s3.del_collection(collection_id=collection_id)["result_status"]
+        res = res and res1
     result["result_status"] = res
     return result
 
@@ -478,7 +557,8 @@ def ask_to_llm_with_local_collection(collection_id: str,
     if llm == "openai":
         embeddings = select_model(embedding_model_number=embedding_model_number).model
         faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_K=top_K)
-        res = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id)
+        res = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id,
+                                                                     embedding_model_number=embedding_model_number)
         result["result_status"] = res["result_status"]
         if result["result_status"]:
             retriever = faissIndexRetriever.retriever
