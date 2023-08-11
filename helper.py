@@ -3,6 +3,7 @@ import os
 import boto3
 import shutil
 import uuid
+import pdfkit
 from pathlib import Path
 from langchain.embeddings import HuggingFaceEmbeddings, CohereEmbeddings, TensorflowHubEmbeddings, OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -29,6 +30,7 @@ bucket_name = "turkish-qa-collections"
 local_temp_folder = "temp"
 total_number_of_embedding_models = 5
 supported_file_types_for_uploading = ["pdf"]
+emrecan_embed_model_public_share_folder = ""
 
 
 # class ReqBody(BaseModel):
@@ -50,12 +52,56 @@ supported_file_types_for_uploading = ["pdf"]
 # class AnsOut(BaseModel):
 #     features: List[Feature]
 
+def process_file(flag: bool, local_file: str, filetype: str, collection_id: str) -> bool:
+    res = flag
+    doc_chunks = produce_doc_chunks_from_file(local_file=local_file, filetype=filetype)
+    for i in range(total_number_of_embedding_models):
+        res1 = process_file_send_s3(local_file=local_file,
+                                    collection_id=collection_id,
+                                    embedding_model_number=i,
+                                    doc_chunks=doc_chunks)["result_status"]
+        res = res and res1
+    res2 = upload_file_to_s3(local_file=local_file,
+                             collection_id=collection_id,
+                             s3_file_name=local_file)["result_status"]
+    res = res and res2
+    return res
+
+
+def produce_pdf_from_url_to_s3(url: str, collection_id: str):
+    res = True
+    result = {"result_status": res}
+    file_name = str(uuid.uuid1()) + ".pdf"
+    filetype = str(Path(file_name).suffix).split(".")[-1]
+    file_path = os.path.join(os.getcwd(), local_temp_folder, file_name)
+    if url is None or url == "" or (not url.startswith("http")):
+        res = False
+        result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
+    else:
+        try:
+            config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+            pdf = pdfkit.from_url(url, False, configuration=config)
+            with open(file_path, mode="wb") as f:
+                f.write(pdf)
+            result["file_name"] = file_name
+        except Exception as e:
+            res = False
+            result["message"] = f"An error occurred: {e}"
+        if res:
+            res1 = process_file(flag=res, local_file=file_name, filetype=filetype, collection_id=collection_id)
+            res = res and res1
+        if res:
+            shutil.rmtree(os.path.join(os.getcwd(), local_temp_folder, Path(file_name).stem))
+
+    result["result_status"] = res
+    return result
+
 
 def upload_file_process_send_s3(uploaded_file: UploadFile, collection_id: str):
-    filetype = Path(uploaded_file.filename).suffix
+    filetype = str(Path(uploaded_file.filename).suffix).split(".")[-1]
     result = {}
     if filetype in supported_file_types_for_uploading:
-        file_name = str(uuid.uuid1()) + filetype
+        file_name = str(uuid.uuid1()) + "." + filetype
         old_file_name = uploaded_file.filename
         uploaded_file.filename = local_temp_folder + '/' + file_name
         res = True
@@ -76,23 +122,14 @@ def upload_file_process_send_s3(uploaded_file: UploadFile, collection_id: str):
             finally:
                 uploaded_file.file.close()
         if res:
-            doc_chunks = produce_doc_chunks_from_file(local_file=file_name, filetype=filetype)
-            for i in range(total_number_of_embedding_models):
-                res1 = process_doc_send_s3(local_file=file_name,
-                                           collection_id=collection_id,
-                                           embedding_model_number=i,
-                                           doc_chunks=doc_chunks)["result_status"]
-                res = res and res1
-            res2 = upload_file_to_s3(local_file=file_name,
-                                     collection_id=collection_id,
-                                     s3_file_name=file_name)["result_status"]
-            res = res and res2
+            res1 = process_file(flag=res, local_file=file_name, filetype=filetype, collection_id=collection_id)
+            res = res and res1
         if res:
             shutil.rmtree(os.path.join(os.getcwd(), local_temp_folder, Path(file_name).stem))
-        result["result_status"] = res
     else:
         result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
-        result["result_status"] = False
+        res = False
+    result["result_status"] = res
     return result
 
 
@@ -130,6 +167,7 @@ class PDFDocumentProcessor(DocumentProcessor):
 
 def select_model(embedding_model_number=0):
     if embedding_model_number == 0:
+        # embedding_model = HuggingFaceModel(model_name_or_path=emrecan_embed_model_public_share_folder)
         embedding_model = HuggingFaceModel(model_name_or_path="bert-base-turkish-cased-mean-nli-stsb-tr")
     elif embedding_model_number == 1:
         embedding_model = TensorflowModel()
@@ -493,10 +531,10 @@ def produce_doc_chunks_from_file(local_file: str, filetype: str):
     return doc_chunks
 
 
-def process_doc_send_s3(local_file: str,
-                        collection_id: str,
-                        embedding_model_number: int,
-                        doc_chunks):
+def process_file_send_s3(local_file: str,
+                         collection_id: str,
+                         embedding_model_number: int,
+                         doc_chunks):
     embedding_model = select_model(embedding_model_number=embedding_model_number).model
     faissIndexManager = FAISSIndexManager(embedding_model=embedding_model)
     faissIndexManager.create_index_db(docs=doc_chunks)

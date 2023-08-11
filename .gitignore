@@ -1,6 +1,7 @@
 .idea
-.env
 __pycache__
 venv
-libraries.txt
+.env
+sage.py
 stream.py
+test.py

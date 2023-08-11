@@ -14,6 +14,12 @@ def read_root():
     return {"Hello": "World"}
 
 
+@app.post("/produce_pdf_from_url_to_s3")
+def produce_pdf_from_url_to_s3(url: str = "https://en.wikipedia.org/wiki/Large_language_model",
+                               collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
+    return helper.produce_pdf_from_url_to_s3(url=url, collection_id=collection_id)
+
+
 @app.post("/upload_file_process_send_s3")
 def upload_file_process_send_s3(uploaded_file: UploadFile,
                                 collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
