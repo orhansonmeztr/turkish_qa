@@ -6,7 +6,10 @@ WORKDIR /code
 
 #
 COPY ./requirements.txt /code/requirements.txt
+RUN apt-get update
 
+# Install software
+RUN apt-get install -y git
 #
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
