@@ -14,8 +14,6 @@ pip install tensorflow
 pip install tensorflow_text
 pip install tensorflow-hub
 pip install requests
-pip install sagemaker
 pip install beautifulsoup4
 pip install unstructured
 pip install pdfkit
-pip install gdown

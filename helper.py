@@ -168,13 +168,13 @@ class PDFDocumentProcessor(DocumentProcessor):
 
 def select_model(embedding_model_number=0):
     if embedding_model_number == 0:
-        embedding_model = HuggingFaceModel(model_name_or_path="emrecan/bert-base-turkish-cased-mean-nli-stsb-tr")
+        embedding_model = HuggingFaceModel(model_name_or_path="bert-base-turkish-cased-mean-nli-stsb-tr")
     elif embedding_model_number == 1:
         embedding_model = TensorflowModel()
     elif embedding_model_number == 2:
         embedding_model = CohereModel()
     elif embedding_model_number == 3:
-        embedding_model = HuggingFaceModel(model_name_or_path="sentence-transformers/clip-ViT-B-32-multilingual-v1")
+        embedding_model = HuggingFaceModel(model_name_or_path="clip-ViT-B-32-multilingual-v1")
     elif embedding_model_number == 4:
         embedding_model = OpenaiModel()
     else:
@@ -195,7 +195,7 @@ class CohereModel:
 
 class TensorflowModel:
     # model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
-    def __init__(self, model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"):
+    def __init__(self, model_url="universal-sentence-encoder-multilingual_3"):
         self.model = TensorflowHubEmbeddings(model_url=model_url)
 
 
