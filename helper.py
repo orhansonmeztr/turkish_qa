@@ -499,7 +499,7 @@ def organize_collection_folders_in_local():
         indexes_for_del = K[:-total_number_of_collections_in_local]
         for j in range(len(indexes_for_del)):
             try:
-                shutil.rmtree(sub_folders[j])
+                shutil.rmtree(sub_folders[indexes_for_del[j]])
             except Exception as e:
                 result["error_message"] = f"An error occurred: '{e}'"
                 res = False
@@ -526,23 +526,6 @@ def del_local_file(local_file_name):
     if err_msg:
         result["error_message"] = f"An error occurred: '{err_msg}'"
     return result
-
-
-# def del_local_collection(local_collection_name):
-#     folder_ = os.path.join(os.getcwd(), local_temp_folder, local_collection_name)
-#     res = True
-#     result = {}
-#     if not os.path.exists(folder_):
-#         result["message"] = f"The folder with the name '{local_collection_name}' was not found in the local folder."
-#         res = False
-#     else:
-#         try:
-#             shutil.rmtree(folder_)
-#         except Exception as e:
-#             result["error_message"] = f"An error occurred: '{e}'"
-#             res = False
-#     result = {"result_status": res}
-#     return result
 
 
 def produce_doc_chunks_from_file(local_file: str, filetype: str):
