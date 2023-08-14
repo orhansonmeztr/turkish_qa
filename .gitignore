@@ -1,8 +1,9 @@
 .idea
 __pycache__
-venv
+/venv/
 .env
-sage.py
-stream.py
-test.py
-Procfile
+/clip-ViT-B-32-multilingual-v1/
+/bert-base-turkish-cased-mean-nli-stsb-tr/
+/universal-sentence-encoder-multilingual_3/
+Dockerfile
+libraries.txt
