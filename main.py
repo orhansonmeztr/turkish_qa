@@ -39,16 +39,6 @@ def del_s3_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45
     return helper.del_s3_collection(collection_id=collection_id)
 
 
-@app.post("/del_local_collection")
-def del_local_folder(local_collection_name: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
-    return helper.del_local_collection(local_collection_name=local_collection_name)
-
-
-@app.post("/download_collection_from_s3_to_local")
-def download_collection_from_s3_to_local(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45"):
-    return helper.download_collection_from_s3_to_local(collection_id=collection_id)
-
-
 @app.post("/ask_to_llm_with_local_collection")
 def ask_to_llm_with_local_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45",
                                      embedding_model_number: int = 0,

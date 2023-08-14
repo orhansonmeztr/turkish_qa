@@ -24,13 +24,14 @@ aws_access_key_os = os.environ.get("AWS_ACCESS_KEY_OS")
 aws_secret_access_key_os = os.environ.get("AWS_SECRET_ACCESS_KEY_OS")
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 cohere_api_key = os.environ.get("COHERE_API_KEY")
+hf_api_key = os.environ.get("HF_API_KEY")
 chunk_size = 500
 chunk_overlap = 30
 bucket_name = "turkish-qa-collections"
 local_temp_folder = "temp"
 total_number_of_embedding_models = 5
+total_number_of_collections_in_local = 5
 supported_file_types_for_uploading = ["pdf"]
-emrecan_embed_model_public_share_folder = ""
 
 
 # class ReqBody(BaseModel):
@@ -167,14 +168,13 @@ class PDFDocumentProcessor(DocumentProcessor):
 
 def select_model(embedding_model_number=0):
     if embedding_model_number == 0:
-        # embedding_model = HuggingFaceModel(model_name_or_path=emrecan_embed_model_public_share_folder)
-        embedding_model = HuggingFaceModel(model_name_or_path="bert-base-turkish-cased-mean-nli-stsb-tr")
+        embedding_model = HuggingFaceModel(model_name_or_path="models/bert-base-turkish-cased-mean-nli-stsb-tr")
     elif embedding_model_number == 1:
         embedding_model = TensorflowModel()
     elif embedding_model_number == 2:
         embedding_model = CohereModel()
     elif embedding_model_number == 3:
-        embedding_model = HuggingFaceModel(model_name_or_path="clip-ViT-B-32-multilingual-v1")
+        embedding_model = HuggingFaceModel(model_name_or_path="models/clip-ViT-B-32-multilingual-v1")
     elif embedding_model_number == 4:
         embedding_model = OpenaiModel()
     else:
@@ -195,7 +195,7 @@ class CohereModel:
 
 class TensorflowModel:
     # model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
-    def __init__(self, model_url="universal-sentence-encoder-multilingual_3"):
+    def __init__(self, model_url="models/universal-sentence-encoder-multilingual_3"):
         self.model = TensorflowHubEmbeddings(model_url=model_url)
 
 
@@ -483,6 +483,31 @@ def upload_file_to_s3(local_file, collection_id, s3_file_name):
     return result
 
 
+def organize_collection_folders_in_local():
+    root_dir = os.path.join(os.getcwd(), local_temp_folder)
+    sub_folders = []
+    creat_dates = []
+    result = {}
+    res = True
+    for obj in os.listdir(root_dir):
+        doc = os.path.join(root_dir, obj)
+        if os.path.isdir(doc):
+            sub_folders.append(doc)
+            creat_dates.append(os.path.getctime(doc))
+    if len(sub_folders) > total_number_of_collections_in_local:
+        K = sorted(range(len(creat_dates)), key=lambda i: creat_dates[i])
+        indexes_for_del = K[:-total_number_of_collections_in_local]
+        for j in range(len(indexes_for_del)):
+            try:
+                shutil.rmtree(sub_folders[j])
+            except Exception as e:
+                result["error_message"] = f"An error occurred: '{e}'"
+                res = False
+                break
+    result["result_status"] = res
+    return result
+
+
 def del_local_file(local_file_name):
     file_ = os.path.join(os.getcwd(), local_temp_folder, local_file_name)
     res = True
@@ -503,21 +528,21 @@ def del_local_file(local_file_name):
     return result
 
 
-def del_local_collection(local_collection_name):
-    folder_ = os.path.join(os.getcwd(), local_temp_folder, local_collection_name)
-    res = True
-    result = {}
-    if not os.path.exists(folder_):
-        result["message"] = f"The folder with the name '{local_collection_name}' was not found in the local folder."
-        res = False
-    else:
-        try:
-            shutil.rmtree(folder_)
-        except Exception as e:
-            result["error_message"] = f"An error occurred: '{e}'"
-            res = False
-    result = {"result_status": res}
-    return result
+# def del_local_collection(local_collection_name):
+#     folder_ = os.path.join(os.getcwd(), local_temp_folder, local_collection_name)
+#     res = True
+#     result = {}
+#     if not os.path.exists(folder_):
+#         result["message"] = f"The folder with the name '{local_collection_name}' was not found in the local folder."
+#         res = False
+#     else:
+#         try:
+#             shutil.rmtree(folder_)
+#         except Exception as e:
+#             result["error_message"] = f"An error occurred: '{e}'"
+#             res = False
+#     result = {"result_status": res}
+#     return result
 
 
 def produce_doc_chunks_from_file(local_file: str, filetype: str):
@@ -592,22 +617,28 @@ def ask_to_llm_with_local_collection(collection_id: str,
                                      reduction_type: str,
                                      question: str):
     result = {}
-    if llm == "openai":
-        embeddings = select_model(embedding_model_number=embedding_model_number).model
-        faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_K=top_K)
-        res = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id,
-                                                                     embedding_model_number=embedding_model_number)
-        result["result_status"] = res["result_status"]
-        if result["result_status"]:
-            retriever = faissIndexRetriever.retriever
-            compressor = CohereReranker(model_name_or_path='rerank-multilingual-v2.0', top_n=top_n)
-            openai_llm = OpenAILLMInteraction(base_retriever=retriever,
-                                              compressor=compressor,
-                                              model_name=engine_name,
-                                              temperature=temperature,
-                                              reduction_type=reduction_type)
-            response = openai_llm.return_results(question=question)
-            result["result_status"] = response["result_status"]
-            del response["result_status"]
-            result["response"] = response
+    res = True
+    organize_collection_folders_in_local()
+    if not os.path.exists(os.path.join(os.getcwd(), local_temp_folder, collection_id)):
+        res = download_collection_from_s3_to_local(collection_id)["result_status"]
+        result["result_status"] = res
+    if res:
+        if llm == "openai":
+            embeddings = select_model(embedding_model_number=embedding_model_number).model
+            faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_K=top_K)
+            res1 = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id,
+                                                                          embedding_model_number=embedding_model_number)
+            result["result_status"] = res1["result_status"]
+            if result["result_status"]:
+                retriever = faissIndexRetriever.retriever
+                compressor = CohereReranker(model_name_or_path='rerank-multilingual-v2.0', top_n=top_n)
+                openai_llm = OpenAILLMInteraction(base_retriever=retriever,
+                                                  compressor=compressor,
+                                                  model_name=engine_name,
+                                                  temperature=temperature,
+                                                  reduction_type=reduction_type)
+                response = openai_llm.return_results(question=question)
+                result["result_status"] = response["result_status"]
+                del response["result_status"]
+                result["response"] = response
     return result
