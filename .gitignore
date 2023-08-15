@@ -6,4 +6,3 @@ __pycache__
 /bert-base-turkish-cased-mean-nli-stsb-tr/
 /universal-sentence-encoder-multilingual_3/
 Dockerfile
-libraries.txt
