@@ -4,6 +4,7 @@ import boto3
 import shutil
 import uuid
 import pdfkit
+from weasyprint import HTML
 from pathlib import Path
 from langchain.embeddings import HuggingFaceEmbeddings, CohereEmbeddings, TensorflowHubEmbeddings, OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -80,10 +81,11 @@ def produce_pdf_from_url_to_s3(url: str, collection_id: str):
         result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
     else:
         try:
-            config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+            config = pdfkit.configuration()
             pdf = pdfkit.from_url(url, False, configuration=config)
             with open(file_path, mode="wb") as f:
                 f.write(pdf)
+            # HTML(url).write_pdf(file_path)
             result["file_name"] = file_name
         except Exception as e:
             res = False
