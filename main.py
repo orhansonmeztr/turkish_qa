@@ -1,5 +1,6 @@
 import helper
 from fastapi import FastAPI, UploadFile
+import uvicorn
 
 app = FastAPI(title="Endpoints for QA over Documents",
               description="For now you can only use 2 and 4 as embedding_model_number")
@@ -59,3 +60,8 @@ def ask_to_llm_with_local_collection(collection_id: str = "378a73bc-e0cb-4777-a5
                                                    llm_temp=llm_temp,
                                                    reduction_type=reduction_type,
                                                    question=question)
+
+
+# For debugging
+# if __name__ == '__main__':
+#     uvicorn.run(app, host='0.0.0.0', port=8000)
