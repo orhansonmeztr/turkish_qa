@@ -61,7 +61,6 @@ def ask_to_llm_with_local_collection(collection_id: str = "378a73bc-e0cb-4777-a5
                                                    reduction_type=reduction_type,
                                                    question=question)
 
-
 # For debugging
 # if __name__ == '__main__':
 #     uvicorn.run(app, host='0.0.0.0', port=8000)
