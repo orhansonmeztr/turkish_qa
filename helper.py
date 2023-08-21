@@ -61,23 +61,21 @@ if not os.path.exists(temp_dir):
 def select_model(embed_model_number=4):
     if embed_model_number == 0:
         embedding_model = HuggingFaceEmbeddings(
-            model_name="bert-base-turkish-cased-mean-nli-stsb-tr",
+            model_name="emrecan/bert-base-turkish-cased-mean-nli-stsb-tr",
             model_kwargs={'device': "cpu"})
     elif embed_model_number == 1:
         embedding_model = TensorflowHubEmbeddings(
-            model_url="universal-sentence-encoder-multilingual_3")
-        # "https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
+            model_url="https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
     elif embed_model_number == 2:
         embedding_model = CohereEmbeddings(model="embed-multilingual-v2.0", cohere_api_key=cohere_api_key)
     elif embed_model_number == 3:
         embedding_model = HuggingFaceHubEmbeddings(
             huggingfacehub_api_token=huggingface_api_token,
-            repo_id="clip-ViT-B-32-multilingual-v1")
+            repo_id="sentence-transformers/clip-ViT-B-32-multilingual-v1")
     elif embed_model_number == 4:
         embedding_model = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=openai_api_key)
     else:
-        return False  # Data other than 0-4 came.
-
+        return False
     return embedding_model
 
 
