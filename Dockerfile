@@ -9,9 +9,9 @@ COPY ./requirements.txt /code/requirements.txt
 RUN apt-get update
 
 # Install software
-RUN apt-get install git
-RUN apt-get install git-lfs
-RUN apt-get install curl
+RUN apt install git
+RUN apt install git-lfs
+RUN apt install curl
 #
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
