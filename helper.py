@@ -4,9 +4,9 @@ import boto3
 import shutil
 import uuid
 import pdfkit
-from weasyprint import HTML
 from pathlib import Path
-from langchain.embeddings import HuggingFaceEmbeddings, CohereEmbeddings, TensorflowHubEmbeddings, OpenAIEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings, HuggingFaceHubEmbeddings
+from langchain.embeddings import CohereEmbeddings, TensorflowHubEmbeddings, OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
 from langchain.retrievers import ContextualCompressionRetriever
@@ -25,7 +25,7 @@ aws_access_key_os = os.environ.get("AWS_ACCESS_KEY_OS")
 aws_secret_access_key_os = os.environ.get("AWS_SECRET_ACCESS_KEY_OS")
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 cohere_api_key = os.environ.get("COHERE_API_KEY")
-hf_api_key = os.environ.get("HF_API_KEY")
+huggingface_api_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 chunk_size = 500
 chunk_overlap = 30
 bucket_name = "turkish-qa-collections"
@@ -33,6 +33,10 @@ local_temp_folder = "temp"
 total_number_of_embedding_models = 5
 total_number_of_collections_in_local = 5
 supported_file_types_for_uploading = ["pdf"]
+
+temp_dir = os.path.join(os.getcwd(), local_temp_folder)
+if not os.path.exists(temp_dir):
+    os.makedirs(temp_dir)
 
 
 # class ReqBody(BaseModel):
@@ -54,19 +58,45 @@ supported_file_types_for_uploading = ["pdf"]
 # class AnsOut(BaseModel):
 #     features: List[Feature]
 
+
+def select_model(embed_model_number=4):
+    if embed_model_number == 0:
+        embedding_model = HuggingFaceEmbeddings(
+            model_name="bert-base-turkish-cased-mean-nli-stsb-tr",
+            model_kwargs={'device': "cpu"})
+    elif embed_model_number == 1:
+        embedding_model = TensorflowHubEmbeddings(
+            model_url="universal-sentence-encoder-multilingual_3")
+        # "https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
+    elif embed_model_number == 2:
+        embedding_model = CohereEmbeddings(model="embed-multilingual-v2.0", cohere_api_key=cohere_api_key)
+    elif embed_model_number == 3:
+        embedding_model = HuggingFaceHubEmbeddings(
+            huggingfacehub_api_token=huggingface_api_token,
+            repo_id="clip-ViT-B-32-multilingual-v1")
+    elif embed_model_number == 4:
+        embedding_model = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=openai_api_key)
+    else:
+        return False  # Data other than 0-4 came.
+
+    return embedding_model
+
+
 def process_file(flag: bool, local_file: str, filetype: str, collection_id: str) -> bool:
     res = flag
     doc_chunks = produce_doc_chunks_from_file(local_file=local_file, filetype=filetype)
-    for i in range(total_number_of_embedding_models):
+    for i in [0]:  # range(total_number_of_embedding_models):
         res1 = process_file_send_s3(local_file=local_file,
                                     collection_id=collection_id,
-                                    embedding_model_number=i,
+                                    embed_model_number=i,
                                     doc_chunks=doc_chunks)["result_status"]
         res = res and res1
-    res2 = upload_file_to_s3(local_file=local_file,
-                             collection_id=collection_id,
-                             s3_file_name=local_file)["result_status"]
-    res = res and res2
+    if res:
+        res2 = upload_file_to_s3(local_file=local_file,
+                                 collection_id=collection_id,
+                                 s3_file_name=local_file)["result_status"]
+        res = res and res2
+    del_local_file(local_file)
     return res
 
 
@@ -81,11 +111,11 @@ def produce_pdf_from_url_to_s3(url: str, collection_id: str):
         result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
     else:
         try:
-            config = pdfkit.configuration()
+            # config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+            config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
             pdf = pdfkit.from_url(url, False, configuration=config)
             with open(file_path, mode="wb") as f:
                 f.write(pdf)
-            # HTML(url).write_pdf(file_path)
             result["file_name"] = file_name
         except Exception as e:
             res = False
@@ -168,43 +198,6 @@ class PDFDocumentProcessor(DocumentProcessor):
         self.docs = docs
 
 
-def select_model(embedding_model_number=0):
-    if embedding_model_number == 0:
-        embedding_model = HuggingFaceModel(model_name_or_path="bert-base-turkish-cased-mean-nli-stsb-tr")
-    elif embedding_model_number == 1:
-        embedding_model = TensorflowModel()
-    elif embedding_model_number == 2:
-        embedding_model = CohereModel()
-    elif embedding_model_number == 3:
-        embedding_model = HuggingFaceModel(model_name_or_path="clip-ViT-B-32-multilingual-v1")
-    elif embedding_model_number == 4:
-        embedding_model = OpenaiModel()
-    else:
-        return False  # Data other than 0-4 came.
-
-    return embedding_model
-
-
-class HuggingFaceModel:  # for emrecan and clip models
-    def __init__(self, model_name_or_path):  # , device="cpu"
-        self.model = HuggingFaceEmbeddings(model_name=model_name_or_path)  # , model_kwargs={'device': device}
-
-
-class CohereModel:
-    def __init__(self, model_name_or_path='embed-multilingual-v2.0'):
-        self.model = CohereEmbeddings(model=model_name_or_path, cohere_api_key=cohere_api_key)
-
-
-class TensorflowModel:
-    def __init__(self, model_url="universal-sentence-encoder-multilingual_3"):
-        self.model = TensorflowHubEmbeddings(model_url=model_url)
-
-
-class OpenaiModel:
-    def __init__(self, model="text-embedding-ada-002"):
-        self.model = OpenAIEmbeddings(model=model, openai_api_key=openai_api_key)
-
-
 class FAISSIndexManager:
     def __init__(self, embedding_model):
         self.embedding_model = embedding_model
@@ -238,10 +231,10 @@ class FAISSIndexManager:
 
 
 class FAISSIndexRetriever:
-    def __init__(self, embedding_model, top_K: int = 10):
+    def __init__(self, embedding_model, top_k: int = 10):
         self.embedding_model = embedding_model
         self.dbFAISS = None
-        self.top_K = top_K
+        self.top_k = top_k
         self.retriever = None
 
     def load_index_from_local(self, collection_id, local_folder_name):
@@ -254,11 +247,11 @@ class FAISSIndexRetriever:
             res = False
         else:
             self.dbFAISS = FAISS.load_local(object_path, self.embedding_model)
-            self.retriever = self.dbFAISS.as_retriever(search_kwargs={"k": self.top_K})
+            self.retriever = self.dbFAISS.as_retriever(search_kwargs={"k": self.top_k})
         result["result_status"] = res
         return result
 
-    def load_indexes_from_local_collection(self, collection_id, embedding_model_number: int):
+    def load_indexes_from_local_collection(self, collection_id, embed_model_number: int):
         result = {}
         res = True
         root_dir = os.path.join(os.getcwd(), local_temp_folder, collection_id)
@@ -272,7 +265,7 @@ class FAISSIndexRetriever:
                 doc = os.path.join(root_dir, file)
                 if os.path.isdir(doc):
                     for index_folder in os.listdir(doc):
-                        if index_folder == str(embedding_model_number):
+                        if index_folder == str(embed_model_number):
                             index_folders.append(os.path.join(root_dir, file, index_folder))
             if len(index_folders) == 0:
                 res = False
@@ -284,7 +277,7 @@ class FAISSIndexRetriever:
                     db.merge_from(db1)
                 dbFAISS = db
                 self.dbFAISS = dbFAISS
-                self.retriever = self.dbFAISS.as_retriever(search_kwargs={"k": self.top_K})
+                self.retriever = self.dbFAISS.as_retriever(search_kwargs={"k": self.top_k})
         result["result_status"] = res
         return result
 
@@ -391,23 +384,36 @@ class S3:
     def download_index_to_local(self, collection_id):
         res = True
         result = {}
-        file_names, folders = self.get_file_folder_names(prefix=collection_id + "/")
+        s3_file_names, s3_folders = self.get_file_folder_names(prefix=collection_id + "/")
         local_path = Path(os.path.join(os.getcwd(), local_temp_folder))
+        s3_doc_folders = []
+        for fol in s3_folders:
+            li = str(fol).split("/")
+            if len(li) == 4:
+                fol_name = li[1]
+                if fol_name not in s3_doc_folders:
+                    s3_doc_folders.append(fol_name)
+
+        for obj in os.listdir(Path.joinpath(local_path, collection_id)):
+            doc = os.path.join(local_path, collection_id, obj)
+            if os.path.isdir(doc):
+                if obj not in s3_doc_folders:
+                    shutil.rmtree(doc)
+
         try:
-            for folder in folders:
+            for folder in s3_folders:
                 folder_path = Path.joinpath(local_path, folder)
-                if os.path.exists(folder_path):
-                    shutil.rmtree(folder_path)
                 folder_path.mkdir(parents=True, exist_ok=True)
 
-            for file_name in file_names:
+            for file_name in s3_file_names:
                 if not str(file_name).split(".")[-1] in supported_file_types_for_uploading:
                     file_path = Path.joinpath(local_path, file_name)
-                    self.client.download_file(
-                        self.bucket_name,
-                        file_name,
-                        str(file_path)
-                    )
+                    if not os.path.exists(file_path):
+                        self.client.download_file(
+                            self.bucket_name,
+                            file_name,
+                            str(file_path)
+                        )
         except Exception as e:
             result["download_err"] = f"An error occurred: '{e}'"
             res = False
@@ -427,9 +433,9 @@ class OpenAILLMInteraction:
                  base_retriever: FAISSIndexRetriever,
                  compressor: CohereReranker,
                  model_name="gpt-3.5-turbo",
-                 temperature=0.0,
+                 llm_temp=0.0,
                  reduction_type="map_reduce"):
-        self.llm = ChatOpenAI(openai_api_key=openai_api_key, temperature=temperature, model_name=model_name,
+        self.llm = ChatOpenAI(openai_api_key=openai_api_key, temperature=llm_temp, model_name=model_name,
                               request_timeout=120)
         self.reduction_type = reduction_type
         self.retriever = ContextualCompressionRetriever(
@@ -478,8 +484,6 @@ def upload_file_to_s3(local_file, collection_id, s3_file_name):
         res = False
         result["error_message"] = f"An error occurred: '{e}'"
     del s3
-    if res:
-        del_local_file(local_file)
     result["result_status"] = res
     return result
 
@@ -542,13 +546,13 @@ def produce_doc_chunks_from_file(local_file: str, filetype: str):
 
 def process_file_send_s3(local_file: str,
                          collection_id: str,
-                         embedding_model_number: int,
+                         embed_model_number: int,
                          doc_chunks):
-    embedding_model = select_model(embedding_model_number=embedding_model_number).model
+    embedding_model = select_model(embed_model_number=embed_model_number)
     faissIndexManager = FAISSIndexManager(embedding_model=embedding_model)
     faissIndexManager.create_index_db(docs=doc_chunks)
     res = faissIndexManager.save_index_to_s3(collection_id=collection_id,
-                                             folder_name=Path(local_file).stem + "/" + str(embedding_model_number)
+                                             folder_name=Path(local_file).stem + "/" + str(embed_model_number)
                                              )["result_status"]
     result = {"result_status": res}
     return result
@@ -592,26 +596,24 @@ def del_s3_collection(collection_id: str):
 
 
 def ask_to_llm_with_local_collection(collection_id: str,
-                                     embedding_model_number: int,
-                                     top_K: int,
+                                     embed_model_number: int,
+                                     top_k: int,
                                      top_n: int,
                                      llm: str,
                                      engine_name: str,
-                                     temperature: float,
+                                     llm_temp: float,
                                      reduction_type: str,
                                      question: str):
     result = {}
-    res = True
     organize_collection_folders_in_local()
-    if not os.path.exists(os.path.join(os.getcwd(), local_temp_folder, collection_id)):
-        res = download_collection_from_s3_to_local(collection_id)["result_status"]
-        result["result_status"] = res
+    res = download_collection_from_s3_to_local(collection_id)["result_status"]
+    result["result_status"] = res
     if res:
         if llm == "openai":
-            embeddings = select_model(embedding_model_number=embedding_model_number).model
-            faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_K=top_K)
+            embeddings = select_model(embed_model_number=embed_model_number).model
+            faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_k=top_k)
             res1 = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id,
-                                                                          embedding_model_number=embedding_model_number)
+                                                                          embed_model_number=embed_model_number)
             result["result_status"] = res1["result_status"]
             if result["result_status"]:
                 retriever = faissIndexRetriever.retriever
@@ -619,7 +621,7 @@ def ask_to_llm_with_local_collection(collection_id: str,
                 openai_llm = OpenAILLMInteraction(base_retriever=retriever,
                                                   compressor=compressor,
                                                   model_name=engine_name,
-                                                  temperature=temperature,
+                                                  llm_temp=llm_temp,
                                                   reduction_type=reduction_type)
                 response = openai_llm.return_results(question=question)
                 result["result_status"] = response["result_status"]

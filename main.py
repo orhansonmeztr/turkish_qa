@@ -1,7 +1,8 @@
 import helper
 from fastapi import FastAPI, UploadFile
 
-app = FastAPI()
+app = FastAPI(title="Endpoints for QA over Documents",
+              description="For now you can only use 2 and 4 as embedding_model_number")
 
 
 @app.get('/api/hc')
@@ -41,20 +42,20 @@ def del_s3_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45
 
 @app.post("/ask_to_llm_with_local_collection")
 def ask_to_llm_with_local_collection(collection_id: str = "378a73bc-e0cb-4777-a58d-cc6913552b45",
-                                     embedding_model_number: int = 0,
-                                     top_K: int = 10,
+                                     embed_model_number: int = 2,
+                                     top_k: int = 10,
                                      top_n: int = 3,
                                      llm: str = "openai",
                                      engine_name: str = 'gpt-3.5-turbo',
-                                     temperature: float = 0.0,
+                                     llm_temp: float = 0.0,
                                      reduction_type: str = 'map_reduce',
                                      question: str = "Gece çalışması nedir?"):
     return helper.ask_to_llm_with_local_collection(collection_id=collection_id,
-                                                   embedding_model_number=embedding_model_number,
-                                                   top_K=top_K,
+                                                   embed_model_number=embed_model_number,
+                                                   top_k=top_k,
                                                    top_n=top_n,
                                                    llm=llm,
                                                    engine_name=engine_name,
-                                                   temperature=temperature,
+                                                   llm_temp=llm_temp,
                                                    reduction_type=reduction_type,
                                                    question=question)
