@@ -58,7 +58,6 @@ if not os.path.exists(temp_dir):
 # class AnsOut(BaseModel):
 #     features: List[Feature]
 
-
 def select_model(embed_model_number=4):
     if embed_model_number == 0:
         embedding_model = HuggingFaceEmbeddings(
