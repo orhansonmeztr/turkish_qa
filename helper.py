@@ -19,7 +19,6 @@ from abc import abstractmethod
 # from typing import List, TypedDict
 from fastapi import UploadFile
 
-
 load_dotenv()
 
 aws_access_key_os = os.environ.get("AWS_ACCESS_KEY_OS")
@@ -83,7 +82,7 @@ def select_model(embed_model_number=4):
 def process_file(flag: bool, local_file: str, filetype: str, collection_id: str) -> bool:
     res = flag
     doc_chunks = produce_doc_chunks_from_file(local_file=local_file, filetype=filetype)
-    for i in [2,3,4]:  # range(total_number_of_embedding_models):
+    for i in [2, 3, 4]:  # range(total_number_of_embedding_models):
         res1 = process_file_send_s3(local_file=local_file,
                                     collection_id=collection_id,
                                     embed_model_number=i,
