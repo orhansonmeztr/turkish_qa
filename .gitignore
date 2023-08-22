@@ -7,3 +7,4 @@ Dockerfile
 /bert-base-turkish-cased-mean-nli-stsb-tr/
 /clip-ViT-B-32-multilingual-v1/
 /universal-sentence-encoder-multilingual_3/
+/temp/
