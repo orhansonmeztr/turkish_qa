@@ -7,10 +7,10 @@ WORKDIR /code
 #
 COPY ./requirements.txt /code/requirements.txt
 
-RUN apt-get update && apt-get install -y https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-
+RUN apt-get update && apt-get install -y wkhtmltopdf
 #
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+#
 
 #
 COPY . /code
