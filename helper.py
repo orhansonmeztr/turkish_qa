@@ -108,8 +108,8 @@ def produce_pdf_from_url_to_s3(url: str, collection_id: str):
         result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
     else:
         try:
-            config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
-            # config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
+            # config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+            config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
             pdf = pdfkit.from_url(url, False, configuration=config)
             with open(file_path, mode="wb") as f:
                 f.write(pdf)
