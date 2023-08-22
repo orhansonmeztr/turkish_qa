@@ -19,6 +19,7 @@ from abc import abstractmethod
 # from typing import List, TypedDict
 from fastapi import UploadFile
 
+
 load_dotenv()
 
 aws_access_key_os = os.environ.get("AWS_ACCESS_KEY_OS")
@@ -82,7 +83,7 @@ def select_model(embed_model_number=4):
 def process_file(flag: bool, local_file: str, filetype: str, collection_id: str) -> bool:
     res = flag
     doc_chunks = produce_doc_chunks_from_file(local_file=local_file, filetype=filetype)
-    for i in [4]:  # range(total_number_of_embedding_models):
+    for i in [2,3,4]:  # range(total_number_of_embedding_models):
         res1 = process_file_send_s3(local_file=local_file,
                                     collection_id=collection_id,
                                     embed_model_number=i,
@@ -108,8 +109,8 @@ def produce_pdf_from_url_to_s3(url: str, collection_id: str):
         result["error_message"] = f"Only files with the extension {supported_file_types_for_uploading} are allowed."
     else:
         try:
-            # config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
-            config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
+            config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+            # config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
             pdf = pdfkit.from_url(url, False, configuration=config)
             with open(file_path, mode="wb") as f:
                 f.write(pdf)
@@ -607,7 +608,7 @@ def ask_to_llm_with_local_collection(collection_id: str,
     result["result_status"] = res
     if res:
         if llm == "openai":
-            embeddings = select_model(embed_model_number=embed_model_number).model
+            embeddings = select_model(embed_model_number=embed_model_number)
             faissIndexRetriever = FAISSIndexRetriever(embedding_model=embeddings, top_k=top_k)
             res1 = faissIndexRetriever.load_indexes_from_local_collection(collection_id=collection_id,
                                                                           embed_model_number=embed_model_number)
